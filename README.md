@@ -1,7 +1,7 @@
 go-xmp
 ===========
 
-[![GoDoc](https://godoc.org/github.com/trimmer-io/go-xmp?status.svg)](https://godoc.org/github.com/trimmer-io/go-xmp/xmp)
+[![GoDoc](https://pkg.go.dev/badge/github.com/unidoc/go-xmp)](https://pkg.go.dev/github.com/unidoc/go-xmp)
 
 
 go-xmp is a native [Go](http://golang.org/) SDK for the [Extensible Metadata Platform](http://www.adobe.com/devnet/xmp.html) (XMP) as defined by the Adobe XMP Specification [Part 1](http://wwwimages.adobe.com/content/dam/Adobe/en/devnet/xmp/pdfs/XMP%20SDK%20Release%20cc-2016-08/XMPSpecificationPart1.pdf), [Part 2](http://wwwimages.adobe.com/content/dam/Adobe/en/devnet/xmp/pdfs/XMP%20SDK%20Release%20cc-2016-08/XMPSpecificationPart2.pdf) and [Part 3](http://wwwimages.adobe.com/content/dam/Adobe/en/devnet/xmp/pdfs/XMP%20SDK%20Release%20cc-2016-08/XMPSpecificationPart3.pdf), a.k.a ISO 16684-1:2011(E).
@@ -51,15 +51,14 @@ Features
 Documentation
 -------------
 
-- [API Reference](http://godoc.org/github.com/trimmer-io/go-xmp/xmp)
-- [FAQ](https://github.com/trimmer-io/go-xmp/wiki/FAQ)
+- [API Reference](https://pkg.go.dev/github.com/unidoc/go-xmp/xmp)
 
 Installation
 ------------
 
 Install go-xmp using the "go get" command:
 
-    go get github.com/trimmer-io/go-xmp
+    go get github.com/unidoc/go-xmp
 
 The Go distribution is go-xmp's only dependency.
 
@@ -77,7 +76,7 @@ go test ./test/ -bench=. -benchmem
 
 goos: darwin
 goarch: amd64
-pkg: trimmer.io/go-xmp/test
+pkg: github.com/unidoc/go-xmp/test
 BenchmarkUnmarshalXMP_5kB-8       5000      321524 ns/op     58071 B/op     1056 allocs/op
 BenchmarkMarshalXMP_5kB-8         5000      270981 ns/op     61384 B/op      758 allocs/op
 BenchmarkMarshalJSON_5kB-8        5000      338354 ns/op     91855 B/op     1023 allocs/op
@@ -119,7 +118,7 @@ Size matters when storing XMP in a database or sending documents over a network.
 Contributing
 ------------
 
-See [CONTRIBUTING.md](https://github.com/trimmer-io/go-xmp/blob/master/.github/CONTRIBUTING.md).
+See [CONTRIBUTING.md](https://github.com/unidoc/go-xmp/blob/master/.github/CONTRIBUTING.md).
 
 
 License
