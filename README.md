@@ -3,6 +3,7 @@ go-xmp
 
 [![GoDoc](https://pkg.go.dev/badge/github.com/unidoc/go-xmp)](https://pkg.go.dev/github.com/unidoc/go-xmp)
 
+> **Note:** This is a fork of [trimmer-io/go-xmp](https://github.com/trimmer-io/go-xmp), maintained by [UniDoc](https://unidoc.io).
 
 go-xmp is a native [Go](http://golang.org/) SDK for the [Extensible Metadata Platform](http://www.adobe.com/devnet/xmp.html) (XMP) as defined by the Adobe XMP Specification [Part 1](http://wwwimages.adobe.com/content/dam/Adobe/en/devnet/xmp/pdfs/XMP%20SDK%20Release%20cc-2016-08/XMPSpecificationPart1.pdf), [Part 2](http://wwwimages.adobe.com/content/dam/Adobe/en/devnet/xmp/pdfs/XMP%20SDK%20Release%20cc-2016-08/XMPSpecificationPart2.pdf) and [Part 3](http://wwwimages.adobe.com/content/dam/Adobe/en/devnet/xmp/pdfs/XMP%20SDK%20Release%20cc-2016-08/XMPSpecificationPart3.pdf), a.k.a ISO 16684-1:2011(E).
 
