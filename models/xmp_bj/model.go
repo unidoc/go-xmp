@@ -17,7 +17,7 @@ package xmpbj
 
 import (
 	"fmt"
-	"github.com/trimmer-io/go-xmp/xmp"
+	"github.com/unidoc/go-xmp/xmp"
 )
 
 var (

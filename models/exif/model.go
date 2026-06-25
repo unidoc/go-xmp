@@ -30,11 +30,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/trimmer-io/go-xmp/models/dc"
-	"github.com/trimmer-io/go-xmp/models/ps"
-	"github.com/trimmer-io/go-xmp/models/tiff"
-	"github.com/trimmer-io/go-xmp/models/xmp_base"
-	"github.com/trimmer-io/go-xmp/xmp"
+	"github.com/unidoc/go-xmp/models/dc"
+	"github.com/unidoc/go-xmp/models/ps"
+	"github.com/unidoc/go-xmp/models/tiff"
+	"github.com/unidoc/go-xmp/models/xmp_base"
+	"github.com/unidoc/go-xmp/xmp"
 )
 
 var (

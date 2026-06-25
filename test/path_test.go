@@ -17,10 +17,10 @@ package main
 import (
 	"testing"
 
-	_ "github.com/trimmer-io/go-xmp/models"
-	"github.com/trimmer-io/go-xmp/models/dc"
-	"github.com/trimmer-io/go-xmp/models/xmp_mm"
-	"github.com/trimmer-io/go-xmp/xmp"
+	_ "github.com/unidoc/go-xmp/models"
+	"github.com/unidoc/go-xmp/models/dc"
+	"github.com/unidoc/go-xmp/models/xmp_mm"
+	"github.com/unidoc/go-xmp/xmp"
 )
 
 func TestIncorrectPaths(T *testing.T) {

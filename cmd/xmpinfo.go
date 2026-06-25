@@ -23,10 +23,10 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "github.com/trimmer-io/go-xmp/models"
-	"github.com/trimmer-io/go-xmp/models/dc"
-	"github.com/trimmer-io/go-xmp/models/xmp_base"
-	"github.com/trimmer-io/go-xmp/xmp"
+	_ "github.com/unidoc/go-xmp/models"
+	"github.com/unidoc/go-xmp/models/dc"
+	"github.com/unidoc/go-xmp/models/xmp_base"
+	"github.com/unidoc/go-xmp/xmp"
 )
 
 var (
