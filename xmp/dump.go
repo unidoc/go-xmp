@@ -17,6 +17,7 @@ package xmp
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 )
 
 func (n Node) Dump(d int) {
@@ -59,10 +60,14 @@ func (d *Document) DumpNamespaces() {
 }
 
 func DumpStats() {
-	fmt.Println("xmp: Node Pool Allocs ", npAllocs)
-	fmt.Println("xmp: Node Pool Frees  ", npFrees)
-	fmt.Println("xmp: Node Pool Hits   ", npHits)
-	fmt.Println("xmp: Node Pool Returns", npReturns)
-	fmt.Println("xmp: Node Pool InUse  ", npAllocs+npHits-npReturns-npFrees)
-	fmt.Println("xmp: Node Pool InPool ", Max64(0, npReturns-npHits))
+	allocs := atomic.LoadInt64(&npAllocs)
+	frees := atomic.LoadInt64(&npFrees)
+	hits := atomic.LoadInt64(&npHits)
+	returns := atomic.LoadInt64(&npReturns)
+	fmt.Println("xmp: Node Pool Allocs ", allocs)
+	fmt.Println("xmp: Node Pool Frees  ", frees)
+	fmt.Println("xmp: Node Pool Hits   ", hits)
+	fmt.Println("xmp: Node Pool Returns", returns)
+	fmt.Println("xmp: Node Pool InUse  ", allocs+hits-returns-frees)
+	fmt.Println("xmp: Node Pool InPool ", Max64(0, returns-hits))
 }
