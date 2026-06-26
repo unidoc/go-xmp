@@ -1,7 +1,7 @@
 go-xmp
 ===========
 
-[![GoDoc](https://pkg.go.dev/badge/github.com/unidoc/go-xmp)](https://pkg.go.dev/github.com/unidoc/go-xmp)
+[![Go Reference](https://pkg.go.dev/badge/github.com/unidoc/go-xmp.svg)](https://pkg.go.dev/github.com/unidoc/go-xmp)
 
 > **Note:** This is a fork of [trimmer-io/go-xmp](https://github.com/trimmer-io/go-xmp), maintained by [UniDoc](https://unidoc.io).
 
