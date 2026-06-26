@@ -1,4 +1,4 @@
-module github.com/trimmer-io/go-xmp
+module github.com/unidoc/go-xmp
 
 go 1.17
 

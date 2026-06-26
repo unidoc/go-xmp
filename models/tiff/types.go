@@ -15,7 +15,7 @@
 package tiff
 
 import (
-	"github.com/trimmer-io/go-xmp/xmp"
+	"github.com/unidoc/go-xmp/xmp"
 )
 
 type YCbCrSubSampling xmp.IntList

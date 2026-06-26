@@ -16,7 +16,7 @@ package riff
 
 import (
 	"strings"
-	"github.com/trimmer-io/go-xmp/xmp"
+	"github.com/unidoc/go-xmp/xmp"
 )
 
 type StringArray xmp.StringArray

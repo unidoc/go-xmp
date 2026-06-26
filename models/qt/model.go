@@ -55,8 +55,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/trimmer-io/go-xmp/models/ixml"
-	"github.com/trimmer-io/go-xmp/xmp"
+	"github.com/unidoc/go-xmp/models/ixml"
+	"github.com/unidoc/go-xmp/xmp"
 )
 
 var (
