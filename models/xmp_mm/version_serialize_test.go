@@ -90,6 +90,8 @@ func TestStVersionSerializesAsElements(t *testing.T) {
 }
 
 func TestStVersionRoundTrip(t *testing.T) {
+	// Compare decoded field values, not raw bytes: xmlns declaration order is
+	// derived from map iteration in Node.Namespaces and is not byte-stable.
 	b1, err := xmp.Marshal(newVersionsDoc(t))
 	if err != nil {
 		t.Fatal(err)
@@ -98,12 +100,16 @@ func TestStVersionRoundTrip(t *testing.T) {
 	if err := xmp.Unmarshal(b1, d2); err != nil {
 		t.Fatal(err)
 	}
-	b2, err := xmp.Marshal(d2)
-	if err != nil {
-		t.Fatal(err)
+	got := FindModel(d2)
+	if got == nil || len(got.Versions) != 1 {
+		t.Fatalf("expected 1 version after round-trip, got %+v", got)
 	}
-	if string(b1) != string(b2) {
-		t.Errorf("round-trip not stable:\n--first--\n%s\n--second--\n%s", b1, b2)
+	v := got.Versions[0]
+	if v.Version != "2" || v.Comments != "second version" || v.Modifier != "tester" {
+		t.Errorf("version fields not preserved: %+v", v)
+	}
+	if v.Event.Action != ActionSaved || v.Event.InstanceID != "xmp.iid:INST" {
+		t.Errorf("nested event not preserved: %+v", v.Event)
 	}
 }
 
