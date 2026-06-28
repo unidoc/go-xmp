@@ -422,15 +422,16 @@ func (e *Encoder) marshalValue(val reflect.Value, finfo *fieldInfo, node *Node, 
 		// Use the attribute value serialization (not marshalValue) so the element
 		// carries the same text the attribute would have and round-trips via
 		// UnmarshalText, instead of the element form (MarshalXMP / arrays) which
-		// some attribute types do not decode back.
+		// some attribute types do not decode back. The element keeps the field's
+		// own name so the decoder can map it back to the field.
 		if asElements {
-			s, ok, err := e.attrTextValue(node, NewName(finfo.name), fv)
+			attr, ok, err := e.attrValue(node, NewName(finfo.name), fv)
 			if err != nil {
 				return err
 			}
 			if ok {
 				resNode := NewNode(NewName(finfo.name))
-				resNode.Value = s
+				resNode.Value = attr.Value
 				node.AddNode(resNode)
 			}
 			continue
@@ -569,137 +570,76 @@ func (e *Encoder) hasElementChild(val reflect.Value, tinfo *typeInfo) bool {
 	return false
 }
 
-// attrTextValue returns the textual value a ",attr" field serializes to, mirroring
-// marshalAttr's value computation; ok is false when the field should be omitted.
-// It is used to write a ",attr" field as the text body of a child element when the
-// containing struct node carries rdf:parseType="Resource" (RDF/XML 7.2.18 forbids
-// property attributes there). Writing the attribute's text value -- rather than
-// recursing through marshalValue, which would prefer MarshalXMP or array forms --
-// keeps the attribute and element serializations identical and round-trippable.
-func (e *Encoder) attrTextValue(node *Node, name xml.Name, val reflect.Value) (string, bool, error) {
+// attrValue computes the attribute serialization of a value (MarshalerAttr ->
+// TextMarshaler -> marshalSimple). ok is false when the field should be omitted
+// (nil pointer/interface, empty MarshalText result, or an empty attribute name).
+//
+// It is the single source of attribute-value serialization, shared by marshalAttr
+// (which adds the returned Attr to the node) and by the rdf:parseType="Resource"
+// path in marshalValue (which writes the attribute's text value as the body of a
+// child element, because RDF/XML 7.2.18 forbids property attributes there). Sharing
+// one implementation keeps the attribute and element forms from drifting apart.
+func (e *Encoder) attrValue(node *Node, name xml.Name, val reflect.Value) (Attr, bool, error) {
 	if val.CanInterface() && val.Type().Implements(attrMarshalerType) {
 		attr, err := val.Interface().(MarshalerAttr).MarshalXMPAttr(e, name, node)
 		if err != nil {
-			return "", false, err
+			return Attr{}, false, err
 		}
-		return attr.Value, attr.Name.Local != "", nil
+		return attr, attr.Name.Local != "", nil
 	}
 	if val.CanAddr() {
 		pv := val.Addr()
 		if pv.CanInterface() && pv.Type().Implements(attrMarshalerType) {
 			attr, err := pv.Interface().(MarshalerAttr).MarshalXMPAttr(e, name, node)
 			if err != nil {
-				return "", false, err
+				return Attr{}, false, err
 			}
-			return attr.Value, attr.Name.Local != "", nil
+			return attr, attr.Name.Local != "", nil
 		}
 	}
 
 	if val.CanInterface() && val.Type().Implements(textMarshalerType) {
 		b, err := val.Interface().(encoding.TextMarshaler).MarshalText()
 		if err != nil || b == nil {
-			return "", false, err
+			return Attr{}, false, err
 		}
-		return string(b), true, nil
+		return Attr{Name: name, Value: string(b)}, true, nil
 	}
 	if val.CanAddr() {
 		pv := val.Addr()
 		if pv.CanInterface() && pv.Type().Implements(textMarshalerType) {
 			b, err := pv.Interface().(encoding.TextMarshaler).MarshalText()
 			if err != nil || b == nil {
-				return "", false, err
+				return Attr{}, false, err
 			}
-			return string(b), true, nil
+			return Attr{Name: name, Value: string(b)}, true, nil
 		}
 	}
 
 	switch val.Kind() {
 	case reflect.Ptr, reflect.Interface:
 		if val.IsNil() {
-			return "", false, nil
+			return Attr{}, false, nil
 		}
 		val = val.Elem()
 	}
 
 	s, b, err := marshalSimple(val.Type(), val)
 	if err != nil {
-		return "", false, err
+		return Attr{}, false, err
 	}
 	if b != nil {
 		s = string(b)
 	}
-	return s, true, nil
+	return Attr{Name: name, Value: s}, true, nil
 }
 
 func (e *Encoder) marshalAttr(node *Node, name xml.Name, val reflect.Value) error {
-	if val.CanInterface() && val.Type().Implements(attrMarshalerType) {
-		// log.Debugf("xmp: marshalAttr calling MarshalXmpAttr on %v for %s\n", val.Type(), name.Local)
-		attr, err := val.Interface().(MarshalerAttr).MarshalXMPAttr(e, name, node)
-		if err != nil {
-			return err
-		}
-		if attr.Name.Local != "" {
-			node.AddAttr(attr)
-		}
-		return nil
-	}
-
-	if val.CanAddr() {
-		pv := val.Addr()
-		if pv.CanInterface() && pv.Type().Implements(attrMarshalerType) {
-			// log.Debugf("xmp: marshalAttr calling MarshalXmpAttr on %v for %s\n", val.Type(), name.Local)
-			attr, err := pv.Interface().(MarshalerAttr).MarshalXMPAttr(e, name, node)
-			if err != nil {
-				return err
-			}
-			if attr.Name.Local != "" {
-				node.AddAttr(attr)
-			}
-			return nil
-		}
-	}
-
-	if val.CanInterface() && val.Type().Implements(textMarshalerType) {
-		// log.Debugf("xmp: marshalAttr calling MarshalText on %v for %s\n", val.Type(), name.Local)
-		b, err := val.Interface().(encoding.TextMarshaler).MarshalText()
-		if err != nil || b == nil {
-			return err
-		}
-		node.AddAttr(Attr{Name: name, Value: string(b)})
-		return nil
-	}
-
-	if val.CanAddr() {
-		pv := val.Addr()
-		if pv.CanInterface() && pv.Type().Implements(textMarshalerType) {
-			// log.Debugf("xmp: marshalAttr calling MarshalText on %v for %s\n", val.Type(), name.Local)
-			b, err := pv.Interface().(encoding.TextMarshaler).MarshalText()
-			if err != nil || b == nil {
-				return err
-			}
-			node.AddAttr(Attr{Name: name, Value: string(b)})
-			return nil
-		}
-	}
-
-	// Dereference or skip nil pointer, interface values.
-	switch val.Kind() {
-	case reflect.Ptr, reflect.Interface:
-		if val.IsNil() {
-			// log.Debugf("xmp: marshalAttr field %s is nil\n", name.Local)
-			return nil
-		}
-		val = val.Elem()
-	}
-
-	s, b, err := marshalSimple(val.Type(), val)
-	if err != nil {
+	attr, ok, err := e.attrValue(node, name, val)
+	if err != nil || !ok {
 		return err
 	}
-	if b != nil {
-		s = string(b)
-	}
-	node.AddAttr(Attr{Name: name, Value: s})
+	node.AddAttr(attr)
 	return nil
 }
 
