@@ -572,7 +572,8 @@ func (e *Encoder) hasElementChild(val reflect.Value, tinfo *typeInfo) bool {
 
 // attrValue computes the attribute serialization of a value (MarshalerAttr ->
 // TextMarshaler -> marshalSimple). ok is false when the field should be omitted
-// (nil pointer/interface, empty MarshalText result, or an empty attribute name).
+// (nil pointer/interface, a nil MarshalText result, or an empty attribute name).
+// A non-nil but empty MarshalText result still serializes, matching marshalAttr.
 //
 // It is the single source of attribute-value serialization, shared by marshalAttr
 // (which adds the returned Attr to the node) and by the rdf:parseType="Resource"
