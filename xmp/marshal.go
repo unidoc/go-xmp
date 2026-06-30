@@ -463,32 +463,11 @@ func (e *Encoder) marshalValue(val reflect.Value, finfo *fieldInfo, node *Node, 
 	// encode struct fields
 	var haveField bool
 	for _, finfo := range tinfo.fields {
-		if finfo.flags&fOmit > 0 {
-			continue
-		}
-
-		if finfo.flags&fElement == 0 {
-			// log.Debugf("xmp: marshalValue field %s is not an element\n", finfo.name)
-			continue
-		}
-
-		// version must always match
-		if !e.version.Between(finfo.minVersion, finfo.maxVersion) {
-			// log.Debugf("xmp: marshalValue node field %s version %v - %v does not match %v\n", finfo.name, finfo.minVersion, finfo.maxVersion, e.version)
+		if !e.shouldEncodeElementField(finfo, val) {
 			continue
 		}
 
 		fv := finfo.value(val)
-
-		if (fv.Kind() == reflect.Interface || fv.Kind() == reflect.Ptr) && fv.IsNil() {
-			// log.Debugf("xmp: marshalValue node field %s is nil\n", finfo.name)
-			continue
-		}
-
-		if finfo.flags&fEmpty == 0 && isEmptyValue(fv) {
-			// log.Debugf("xmp: marshalValue node field %s is empty\n", finfo.name)
-			continue
-		}
 
 		// find or create output node for storing the attribute/node contents
 		var dest *Node
@@ -547,25 +526,35 @@ func isEmptyValue(v reflect.Value) bool {
 	return false
 }
 
-// hasElementChild reports whether the struct value has at least one non-empty
-// element (non-attr) field, using the same selection rules as the element-encoding
-// loop in marshalValue. When true, the struct node will carry rdf:parseType="Resource".
+// shouldEncodeElementField reports whether a struct field is serialized as a
+// child element with the current encoder version and value. It is the single
+// source of truth for that decision, shared by the element-encoding loop in
+// marshalValue and by hasElementChild, so the two cannot drift apart.
+func (e *Encoder) shouldEncodeElementField(finfo fieldInfo, val reflect.Value) bool {
+	if finfo.flags&fOmit > 0 || finfo.flags&fElement == 0 {
+		return false
+	}
+	if !e.version.Between(finfo.minVersion, finfo.maxVersion) {
+		return false
+	}
+	fv := finfo.value(val)
+	if (fv.Kind() == reflect.Interface || fv.Kind() == reflect.Ptr) && fv.IsNil() {
+		return false
+	}
+	if finfo.flags&fEmpty == 0 && isEmptyValue(fv) {
+		return false
+	}
+	return true
+}
+
+// hasElementChild reports whether the struct value has at least one field that
+// will be serialized as a child element. When true, the struct node carries
+// rdf:parseType="Resource".
 func (e *Encoder) hasElementChild(val reflect.Value, tinfo *typeInfo) bool {
 	for _, finfo := range tinfo.fields {
-		if finfo.flags&fOmit > 0 || finfo.flags&fElement == 0 {
-			continue
+		if e.shouldEncodeElementField(finfo, val) {
+			return true
 		}
-		if !e.version.Between(finfo.minVersion, finfo.maxVersion) {
-			continue
-		}
-		fv := finfo.value(val)
-		if (fv.Kind() == reflect.Interface || fv.Kind() == reflect.Ptr) && fv.IsNil() {
-			continue
-		}
-		if finfo.flags&fEmpty == 0 && isEmptyValue(fv) {
-			continue
-		}
-		return true
 	}
 	return false
 }
@@ -580,6 +569,10 @@ func (e *Encoder) hasElementChild(val reflect.Value, tinfo *typeInfo) bool {
 // path in marshalValue (which writes the attribute's text value as the body of a
 // child element, because RDF/XML 7.2.18 forbids property attributes there). Sharing
 // one implementation keeps the attribute and element forms from drifting apart.
+//
+// Note: no concrete type in this module implements MarshalerAttr, so that branch
+// is currently unexercised. It is kept for external models; such a type read back
+// from a demoted element is decoded via UnmarshalXMPAttr (see unmarshal: fAttr).
 func (e *Encoder) attrValue(node *Node, name xml.Name, val reflect.Value) (Attr, bool, error) {
 	if val.CanInterface() && val.Type().Implements(attrMarshalerType) {
 		attr, err := val.Interface().(MarshalerAttr).MarshalXMPAttr(e, name, node)
