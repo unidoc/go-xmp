@@ -219,6 +219,15 @@ func (d *Decoder) decodeAttribute(ctx *NodeList, src Attr) error {
 }
 
 func (d *Decoder) unmarshal(val reflect.Value, finfo *fieldInfo, src *Node) error {
+	// A ",attr" struct field can appear as a child element when its struct was
+	// serialized with rdf:parseType="Resource" (marshalValue demotes attribute
+	// fields to elements there, since RDF/XML forbids property attributes on such
+	// nodes). Decode it through the attribute path so a custom UnmarshalXMPAttr is
+	// honored, symmetric with how attrValue produced the value on marshal.
+	if finfo != nil && finfo.flags&fAttr != 0 {
+		return d.unmarshalAttr(val, finfo, Attr{Name: src.XMLName, Value: src.Value})
+	}
+
 	// Load value from interface, but only if the result will be
 	// usefully addressable.
 	val = derefValue(val)

@@ -378,6 +378,18 @@ func (e *Encoder) marshalValue(val reflect.Value, finfo *fieldInfo, node *Node, 
 		return err
 	}
 
+	// A struct that has at least one non-empty element field is serialized as a
+	// property-and-node element with rdf:parseType="Resource" (see end of this
+	// function). Per the RDF/XML Syntax Specification (Revised), production
+	// 7.2.18 parseTypeResourcePropertyElt, property attributes are NOT permitted
+	// on such elements. We must therefore serialize the ",attr" fields as child
+	// elements too. This only applies to nested struct nodes; top-level models
+	// (withWrapper) render into rdf:Description, which never carries parseType.
+	asElements := false
+	if !withWrapper && node != nil && node.XMLName != rdfDescription {
+		asElements = e.hasElementChild(val, tinfo)
+	}
+
 	// encode struct attributes
 	for _, finfo := range tinfo.fields {
 		if finfo.flags&fOmit > 0 {
@@ -403,6 +415,25 @@ func (e *Encoder) marshalValue(val reflect.Value, finfo *fieldInfo, node *Node, 
 
 		if finfo.flags&fEmpty == 0 && isEmptyValue(fv) {
 			// log.Debugf("xmp: marshalValue attr field %s is empty\n", finfo.name)
+			continue
+		}
+
+		// rdf:parseType="Resource" forbids property attributes: emit as element.
+		// Use the attribute value serialization (not marshalValue) so the element
+		// carries the same text the attribute would have and round-trips via
+		// UnmarshalText, instead of the element form (MarshalXMP / arrays) which
+		// some attribute types do not decode back. The element keeps the field's
+		// own name so the decoder can map it back to the field.
+		if asElements {
+			attr, ok, err := e.attrValue(node, NewName(finfo.name), fv)
+			if err != nil {
+				return err
+			}
+			if ok {
+				resNode := NewNode(NewName(finfo.name))
+				resNode.Value = attr.Value
+				node.AddNode(resNode)
+			}
 			continue
 		}
 
@@ -432,32 +463,11 @@ func (e *Encoder) marshalValue(val reflect.Value, finfo *fieldInfo, node *Node, 
 	// encode struct fields
 	var haveField bool
 	for _, finfo := range tinfo.fields {
-		if finfo.flags&fOmit > 0 {
-			continue
-		}
-
-		if finfo.flags&fElement == 0 {
-			// log.Debugf("xmp: marshalValue field %s is not an element\n", finfo.name)
-			continue
-		}
-
-		// version must always match
-		if !e.version.Between(finfo.minVersion, finfo.maxVersion) {
-			// log.Debugf("xmp: marshalValue node field %s version %v - %v does not match %v\n", finfo.name, finfo.minVersion, finfo.maxVersion, e.version)
+		if !e.shouldEncodeElementField(finfo, val) {
 			continue
 		}
 
 		fv := finfo.value(val)
-
-		if (fv.Kind() == reflect.Interface || fv.Kind() == reflect.Ptr) && fv.IsNil() {
-			// log.Debugf("xmp: marshalValue node field %s is nil\n", finfo.name)
-			continue
-		}
-
-		if finfo.flags&fEmpty == 0 && isEmptyValue(fv) {
-			// log.Debugf("xmp: marshalValue node field %s is empty\n", finfo.name)
-			continue
-		}
 
 		// find or create output node for storing the attribute/node contents
 		var dest *Node
@@ -516,75 +526,114 @@ func isEmptyValue(v reflect.Value) bool {
 	return false
 }
 
-func (e *Encoder) marshalAttr(node *Node, name xml.Name, val reflect.Value) error {
+// shouldEncodeElementField reports whether a struct field is serialized as a
+// child element with the current encoder version and value. It is the single
+// source of truth for that decision, shared by the element-encoding loop in
+// marshalValue and by hasElementChild, so the two cannot drift apart.
+func (e *Encoder) shouldEncodeElementField(finfo fieldInfo, val reflect.Value) bool {
+	if finfo.flags&fOmit > 0 || finfo.flags&fElement == 0 {
+		return false
+	}
+	if !e.version.Between(finfo.minVersion, finfo.maxVersion) {
+		return false
+	}
+	fv := finfo.value(val)
+	if (fv.Kind() == reflect.Interface || fv.Kind() == reflect.Ptr) && fv.IsNil() {
+		return false
+	}
+	if finfo.flags&fEmpty == 0 && isEmptyValue(fv) {
+		return false
+	}
+	return true
+}
+
+// hasElementChild reports whether the struct value has at least one field that
+// will be serialized as a child element. When true, the struct node carries
+// rdf:parseType="Resource".
+func (e *Encoder) hasElementChild(val reflect.Value, tinfo *typeInfo) bool {
+	for _, finfo := range tinfo.fields {
+		if e.shouldEncodeElementField(finfo, val) {
+			return true
+		}
+	}
+	return false
+}
+
+// attrValue computes the attribute serialization of a value (MarshalerAttr ->
+// TextMarshaler -> marshalSimple). ok is false when the field should be omitted
+// (nil pointer/interface, a nil MarshalText result, or an empty attribute name).
+// A non-nil but empty MarshalText result still serializes, matching marshalAttr.
+//
+// It is the single source of attribute-value serialization, shared by marshalAttr
+// (which adds the returned Attr to the node) and by the rdf:parseType="Resource"
+// path in marshalValue (which writes the attribute's text value as the body of a
+// child element, because RDF/XML 7.2.18 forbids property attributes there). Sharing
+// one implementation keeps the attribute and element forms from drifting apart.
+//
+// Note: no concrete type in this module implements MarshalerAttr, so that branch
+// is currently unexercised. It is kept for external models; such a type read back
+// from a demoted element is decoded via UnmarshalXMPAttr (see unmarshal: fAttr).
+func (e *Encoder) attrValue(node *Node, name xml.Name, val reflect.Value) (Attr, bool, error) {
 	if val.CanInterface() && val.Type().Implements(attrMarshalerType) {
-		// log.Debugf("xmp: marshalAttr calling MarshalXmpAttr on %v for %s\n", val.Type(), name.Local)
 		attr, err := val.Interface().(MarshalerAttr).MarshalXMPAttr(e, name, node)
 		if err != nil {
-			return err
+			return Attr{}, false, err
 		}
-		if attr.Name.Local != "" {
-			node.AddAttr(attr)
-		}
-		return nil
+		return attr, attr.Name.Local != "", nil
 	}
-
 	if val.CanAddr() {
 		pv := val.Addr()
 		if pv.CanInterface() && pv.Type().Implements(attrMarshalerType) {
-			// log.Debugf("xmp: marshalAttr calling MarshalXmpAttr on %v for %s\n", val.Type(), name.Local)
 			attr, err := pv.Interface().(MarshalerAttr).MarshalXMPAttr(e, name, node)
 			if err != nil {
-				return err
+				return Attr{}, false, err
 			}
-			if attr.Name.Local != "" {
-				node.AddAttr(attr)
-			}
-			return nil
+			return attr, attr.Name.Local != "", nil
 		}
 	}
 
 	if val.CanInterface() && val.Type().Implements(textMarshalerType) {
-		// log.Debugf("xmp: marshalAttr calling MarshalText on %v for %s\n", val.Type(), name.Local)
 		b, err := val.Interface().(encoding.TextMarshaler).MarshalText()
 		if err != nil || b == nil {
-			return err
+			return Attr{}, false, err
 		}
-		node.AddAttr(Attr{Name: name, Value: string(b)})
-		return nil
+		return Attr{Name: name, Value: string(b)}, true, nil
 	}
-
 	if val.CanAddr() {
 		pv := val.Addr()
 		if pv.CanInterface() && pv.Type().Implements(textMarshalerType) {
-			// log.Debugf("xmp: marshalAttr calling MarshalText on %v for %s\n", val.Type(), name.Local)
 			b, err := pv.Interface().(encoding.TextMarshaler).MarshalText()
 			if err != nil || b == nil {
-				return err
+				return Attr{}, false, err
 			}
-			node.AddAttr(Attr{Name: name, Value: string(b)})
-			return nil
+			return Attr{Name: name, Value: string(b)}, true, nil
 		}
 	}
 
-	// Dereference or skip nil pointer, interface values.
 	switch val.Kind() {
 	case reflect.Ptr, reflect.Interface:
 		if val.IsNil() {
-			// log.Debugf("xmp: marshalAttr field %s is nil\n", name.Local)
-			return nil
+			return Attr{}, false, nil
 		}
 		val = val.Elem()
 	}
 
 	s, b, err := marshalSimple(val.Type(), val)
 	if err != nil {
-		return err
+		return Attr{}, false, err
 	}
 	if b != nil {
 		s = string(b)
 	}
-	node.AddAttr(Attr{Name: name, Value: s})
+	return Attr{Name: name, Value: s}, true, nil
+}
+
+func (e *Encoder) marshalAttr(node *Node, name xml.Name, val reflect.Value) error {
+	attr, ok, err := e.attrValue(node, name, val)
+	if err != nil || !ok {
+		return err
+	}
+	node.AddAttr(attr)
 	return nil
 }
 
