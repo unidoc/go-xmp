@@ -41,6 +41,7 @@ type Decoder struct {
 	intNsMap map[string]*Namespace
 	extNsMap map[string]*Namespace
 	version  Version
+	strict   bool
 }
 
 func NewDecoder(r io.Reader) *Decoder {
@@ -49,11 +50,35 @@ func NewDecoder(r io.Reader) *Decoder {
 		nodes:    make(NodeList, 0),
 		intNsMap: make(map[string]*Namespace),
 		extNsMap: make(map[string]*Namespace),
+		strict:   true,
 	}
 }
 
 func (d *Decoder) SetVersion(v Version) {
 	d.version = v
+}
+
+// SetStrict controls how the decoder handles field-level decoding problems:
+// an unparseable property value, or a child element / attribute with no
+// matching struct field. When true (the default) the decoder fails the whole
+// packet on the first such problem. When false such problems are logged at
+// debug level and the offending property is skipped, so the remaining
+// well-formed properties still load. Genuinely malformed XML and I/O errors
+// always fail regardless of this setting.
+func (d *Decoder) SetStrict(strict bool) {
+	d.strict = strict
+}
+
+// softDecodeError downgrades a field-level decoding error. In strict mode (the
+// default) it returns the error unchanged so the whole packet fails. In lenient
+// mode it logs the error and returns nil so decoding continues with the
+// offending property skipped.
+func (d *Decoder) softDecodeError(err error) error {
+	if err == nil || d.strict {
+		return err
+	}
+	Log.Debugf("xmp: skipping property: %v", err)
+	return nil
 }
 
 func Unmarshal(data []byte, d *Document) error {
@@ -236,7 +261,7 @@ func (d *Decoder) unmarshal(val reflect.Value, finfo *fieldInfo, src *Node) erro
 	if val.CanAddr() {
 		pv := val.Addr()
 		if pv.CanInterface() && (finfo != nil && finfo.flags&fUnmarshal > 0 || pv.Type().Implements(unmarshalerType)) {
-			return pv.Interface().(Unmarshaler).UnmarshalXMP(d, src, nil)
+			return d.softDecodeError(pv.Interface().(Unmarshaler).UnmarshalXMP(d, src, nil))
 		}
 	}
 
@@ -244,7 +269,7 @@ func (d *Decoder) unmarshal(val reflect.Value, finfo *fieldInfo, src *Node) erro
 	if val.CanAddr() {
 		pv := val.Addr()
 		if pv.CanInterface() && (finfo != nil && finfo.flags&fTextUnmarshal > 0 || pv.Type().Implements(textUnmarshalerType)) {
-			return pv.Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(src.Value))
+			return d.softDecodeError(pv.Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(src.Value)))
 		}
 	}
 
@@ -260,8 +285,8 @@ func (d *Decoder) unmarshal(val reflect.Value, finfo *fieldInfo, src *Node) erro
 				if err := d.unmarshalAttr(field, finfo, a); err != nil {
 					return err
 				}
-			} else {
-				return fmt.Errorf("xmp: unmarshal model %s: field for attr %s not found in type %v", src.FullName(), a.Name.Local, val.Type())
+			} else if err := d.softDecodeError(fmt.Errorf("xmp: unmarshal model %s: field for attr %s not found in type %v", src.FullName(), a.Name.Local, val.Type())); err != nil {
+				return err
 			}
 		}
 
@@ -282,15 +307,15 @@ func (d *Decoder) unmarshal(val reflect.Value, finfo *fieldInfo, src *Node) erro
 					if err := d.unmarshal(field, finfo, n); err != nil {
 						return err
 					}
-				} else {
-					return fmt.Errorf("xmp: unmarshal model %s: struct field %s not found (not stored)", src.FullName(), name)
+				} else if err := d.softDecodeError(fmt.Errorf("xmp: unmarshal model %s: struct field %s not found (not stored)", src.FullName(), name)); err != nil {
+					return err
 				}
 			}
 		}
 	} else {
 		// otherwise set simple value directly
 		if err := setValue(val, src.Value); err != nil {
-			return fmt.Errorf("xmp: unmarshal %s: %v", finfo.String(), err)
+			return d.softDecodeError(fmt.Errorf("xmp: unmarshal %s: %v", finfo.String(), err))
 		}
 	}
 
@@ -305,7 +330,7 @@ func (d *Decoder) unmarshalAttr(val reflect.Value, finfo *fieldInfo, src Attr) e
 	if val.CanAddr() {
 		pv := val.Addr()
 		if pv.CanInterface() && (finfo != nil && finfo.flags&fUnmarshalAttr > 0 || pv.Type().Implements(attrUnmarshalerType)) {
-			return pv.Interface().(UnmarshalerAttr).UnmarshalXMPAttr(d, src)
+			return d.softDecodeError(pv.Interface().(UnmarshalerAttr).UnmarshalXMPAttr(d, src))
 		}
 	}
 
@@ -313,7 +338,7 @@ func (d *Decoder) unmarshalAttr(val reflect.Value, finfo *fieldInfo, src Attr) e
 	if val.CanAddr() {
 		pv := val.Addr()
 		if pv.CanInterface() && (finfo != nil && finfo.flags&fTextUnmarshal > 0 || pv.Type().Implements(textUnmarshalerType)) {
-			return pv.Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(src.Value))
+			return d.softDecodeError(pv.Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(src.Value)))
 		}
 	}
 
@@ -332,7 +357,7 @@ func (d *Decoder) unmarshalAttr(val reflect.Value, finfo *fieldInfo, src Attr) e
 	}
 
 	// otherwise set value directly
-	return setValue(val, src.Value)
+	return d.softDecodeError(setValue(val, src.Value))
 }
 
 // Translate an xml name's namespace to XMP format.
