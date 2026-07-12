@@ -344,15 +344,19 @@ func (d *Decoder) unmarshalAttr(val reflect.Value, finfo *fieldInfo, src Attr) e
 
 	// Slice of element values.
 	if val.Type().Kind() == reflect.Slice && val.Type().Elem().Kind() != reflect.Uint8 {
-		// Grow slice.
-		n := val.Len()
-		val.Set(reflect.Append(val, reflect.Zero(val.Type().Elem())))
-
-		// Recur to read element into slice.
-		if err := d.unmarshalAttr(val.Index(n), nil, src); err != nil {
-			val.SetLen(n)
-			return fmt.Errorf("xmp: unmarshal %s: %v", finfo.String(), err)
+		// Decode into a standalone element and only append on success. The
+		// element is decoded strictly so a failure is reported here rather than
+		// swallowed by a nested softDecodeError; that keeps a skipped value (in
+		// lenient mode) from leaving a zero-value entry in the slice.
+		elem := reflect.New(val.Type().Elem()).Elem()
+		strict := d.strict
+		d.strict = true
+		err := d.unmarshalAttr(elem, nil, src)
+		d.strict = strict
+		if err != nil {
+			return d.softDecodeError(fmt.Errorf("xmp: unmarshal %s: %v", finfo.String(), err))
 		}
+		val.Set(reflect.Append(val, elem))
 		return nil
 	}
 

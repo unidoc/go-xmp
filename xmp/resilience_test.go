@@ -38,6 +38,7 @@ type rtModel struct {
 	Text string   `xmp:"rt:text"`
 	Date xmp.Date `xmp:"rt:date"`
 	Sub  rtSub    `xmp:"rt:sub"`
+	Nums []int    `xmp:"rt:num,attr"`
 }
 
 func (m *rtModel) Can(ns string) bool              { return ns == nsRT.GetName() }
@@ -95,6 +96,26 @@ func TestLenientSkipsUnknownChild(t *testing.T) {
 	}
 	if m.Sub.Known != "ok" {
 		t.Errorf("Sub.Known = %q, want %q", m.Sub.Known, "ok")
+	}
+}
+
+func TestLenientSkipsBadSliceAttrElement(t *testing.T) {
+	pkt := `<x:xmpmeta xmlns:x="adobe:ns:meta/">` +
+		`<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">` +
+		`<rdf:Description rdf:about="" xmlns:rt="` + rtNS + `" rt:num="notanumber">` +
+		`<rt:text>hi</rt:text></rdf:Description></rdf:RDF></x:xmpmeta>`
+	doc := xmp.NewDocument()
+	dec := xmp.NewDecoder(strings.NewReader(pkt))
+	dec.SetStrict(false)
+	if err := dec.Decode(doc); err != nil {
+		t.Fatalf("lenient decode: unexpected error: %v", err)
+	}
+	m := doc.FindModel(nsRT).(*rtModel)
+	if m.Text != "hi" {
+		t.Errorf("Text = %q, want %q", m.Text, "hi")
+	}
+	if len(m.Nums) != 0 {
+		t.Errorf("Nums = %v, want empty (bad element skipped, not appended as zero)", m.Nums)
 	}
 }
 
