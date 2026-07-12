@@ -185,11 +185,91 @@ func repairTZ(value string) string {
 			return value[:l-5] + value[l-4:]
 		}
 	}
+	return repairOffset(value)
+}
+
+// repairOffset normalizes a trailing UTC offset that omits the minutes and
+// the separating colon, e.g. "2019-12-24T15:49:34.000+03" -> "...+03:00".
+// It only acts on a sign that directly follows a digit (the seconds or
+// fractional part), so date components like "2019-12-24" are left untouched;
+// callers (repairTZ) additionally guard on length before reaching here.
+func repairOffset(value string) string {
+	l := len(value)
+	if l < 4 {
+		return value
+	}
+	if sign := value[l-3]; (sign == '+' || sign == '-') &&
+		isASCIIDigit(value[l-1]) && isASCIIDigit(value[l-2]) && isASCIIDigit(value[l-4]) {
+		return value + ":00"
+	}
 	return value
+}
+
+func isASCIIDigit(c byte) bool {
+	return c >= '0' && c <= '9'
+}
+
+// normalizePDFDate converts a PDF date string (ISO 32000-1 "D:" form,
+// D:YYYYMMDDHHmmSSOHH'mm', with trailing fields optional) into an ISO-8601
+// datetime understood by ParseDate's layouts. Some producers put such values
+// into XMP date properties. Non-PDF input is returned unchanged.
+func normalizePDFDate(value string) string {
+	if !strings.HasPrefix(value, "D:") {
+		return value
+	}
+	rest := value[2:]
+
+	// leading run of digits: YYYY[MM[DD[HH[mm[SS]]]]]
+	i := 0
+	for i < len(rest) && isASCIIDigit(rest[i]) {
+		i++
+	}
+	digits, off := rest[:i], rest[i:]
+	if len(digits) < 4 {
+		return value // not a usable date; let ParseDate reject it
+	}
+	if len(digits) > 14 {
+		digits = digits[:14] // ignore sub-second / trailing junk digits
+	}
+	// pad missing components (month and day default to 01, time to 00)
+	digits += "00000101000000"[len(digits):]
+	date := digits[0:4] + "-" + digits[4:6] + "-" + digits[6:8] +
+		"T" + digits[8:10] + ":" + digits[10:12] + ":" + digits[12:14]
+
+	switch {
+	case off == "":
+		return date
+	case off[0] == 'Z' || off[0] == 'z':
+		return date + "Z"
+	case off[0] == '+' || off[0] == '-':
+		body := strings.Trim(off[1:], "'")
+		hh, mm := body, "00"
+		if j := strings.IndexByte(body, '\''); j >= 0 {
+			hh, mm = body[:j], body[j+1:]
+		} else if len(body) > 2 {
+			hh, mm = body[:len(body)-2], body[len(body)-2:]
+		}
+		if hh == "" {
+			hh = "0"
+		}
+		if mm == "" {
+			mm = "0"
+		}
+		if len(hh) == 1 {
+			hh = "0" + hh
+		}
+		if len(mm) == 1 {
+			mm = "0" + mm
+		}
+		return date + string(off[0]) + hh + ":" + mm
+	default:
+		return date
+	}
 }
 
 func ParseDate(value string) (Date, error) {
 	if value != "" {
+		value = normalizePDFDate(value)
 		value = repairTZ(value)
 		for _, f := range dateFormats {
 			if t, err := time.Parse(f, value); err == nil {
