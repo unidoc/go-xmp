@@ -212,7 +212,9 @@ func isASCIIDigit(c byte) bool {
 // normalizePDFDate converts a PDF date string (ISO 32000-1 "D:" form,
 // D:YYYYMMDDHHmmSSOHH'mm', with trailing fields optional) into an ISO-8601
 // datetime understood by ParseDate's layouts. Some producers put such values
-// into XMP date properties. Non-PDF input is returned unchanged.
+// into XMP date properties. Input without the "D:" prefix (or with fewer than
+// four leading digits) is returned unchanged; a "D:" value is normalized on a
+// best-effort basis and any result ParseDate cannot parse is rejected there.
 func normalizePDFDate(value string) string {
 	if !strings.HasPrefix(value, "D:") {
 		return value
