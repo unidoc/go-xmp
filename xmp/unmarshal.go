@@ -58,13 +58,17 @@ func (d *Decoder) SetVersion(v Version) {
 	d.version = v
 }
 
-// SetStrict controls how the decoder handles field-level decoding problems:
-// an unparseable property value, or a child element / attribute with no
-// matching struct field. When true (the default) the decoder fails the whole
-// packet on the first such problem. When false such problems are logged at
-// debug level and the offending property is skipped, so the remaining
-// well-formed properties still load. Genuinely malformed XML and I/O errors
-// always fail regardless of this setting.
+// SetStrict controls how the decoder handles field-level problems while
+// decoding into a struct: an unparseable property value, or a child element /
+// attribute of a struct property that has no matching struct field. When true
+// (the default) the decoder fails the whole packet on the first such problem.
+// When false they are logged at debug level and the offending property is
+// skipped, so the remaining well-formed properties still load.
+//
+// This setting does not affect top-level properties or attributes that have no
+// matching model field: those are always captured as external (unknown)
+// nodes/attrs in both modes. Genuinely malformed XML and I/O errors also always
+// fail regardless of this setting.
 func (d *Decoder) SetStrict(strict bool) {
 	d.strict = strict
 }
