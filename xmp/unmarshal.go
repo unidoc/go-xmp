@@ -104,6 +104,19 @@ func fieldInfoName(finfo *fieldInfo) string {
 	return finfo.String()
 }
 
+// withStrict runs fn with strict decoding forced on, restoring the previous
+// mode afterwards (panic-safe). Callers that decode an element and only store
+// it on success use this so the element's decode error surfaces regardless of
+// lenient mode; they then pass that error through softDecodeError to decide
+// whether to skip the element or fail the packet. This keeps a skipped value
+// (in lenient mode) from being stored as a zero.
+func (d *Decoder) withStrict(fn func() error) error {
+	strict := d.strict
+	d.strict = true
+	defer func() { d.strict = strict }()
+	return fn()
+}
+
 func Unmarshal(data []byte, d *Document) error {
 	return NewDecoder(bytes.NewReader(data)).Decode(d)
 }
@@ -367,18 +380,11 @@ func (d *Decoder) unmarshalAttr(val reflect.Value, finfo *fieldInfo, src Attr) e
 
 	// Slice of element values.
 	if val.Type().Kind() == reflect.Slice && val.Type().Elem().Kind() != reflect.Uint8 {
-		// Decode into a standalone element and only append on success. The
-		// element is decoded strictly so a failure is reported here rather than
-		// swallowed by a nested softDecodeError; that keeps a skipped value (in
-		// lenient mode) from leaving a zero-value entry in the slice. The flag
-		// is restored via defer so a panic in unmarshalAttr cannot leave the
-		// decoder stuck in strict mode.
+		// Decode into a standalone element and only append on success, so a
+		// skipped value (in lenient mode) does not leave a zero-value entry in
+		// the slice.
 		elem := reflect.New(val.Type().Elem()).Elem()
-		strict := d.strict
-		d.strict = true
-		defer func() { d.strict = strict }()
-		if err := d.unmarshalAttr(elem, nil, src); err != nil {
-			d.strict = strict // decide skip vs propagate in the caller's mode
+		if err := d.withStrict(func() error { return d.unmarshalAttr(elem, nil, src) }); err != nil {
 			return d.softDecodeError(fmt.Errorf("xmp: unmarshal %s: %v", fieldInfoName(finfo), err))
 		}
 		val.Set(reflect.Append(val, elem))

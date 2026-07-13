@@ -35,10 +35,11 @@ type rtSub struct {
 }
 
 type rtModel struct {
-	Text string   `xmp:"rt:text"`
-	Date xmp.Date `xmp:"rt:date"`
-	Sub  rtSub    `xmp:"rt:sub"`
-	Nums []int    `xmp:"rt:num,attr"`
+	Text  string       `xmp:"rt:text"`
+	Date  xmp.Date     `xmp:"rt:date"`
+	Sub   rtSub        `xmp:"rt:sub"`
+	Nums  []int        `xmp:"rt:num,attr"`
+	Dates xmp.DateList `xmp:"rt:dates"`
 }
 
 func (m *rtModel) Can(ns string) bool              { return ns == nsRT.GetName() }
@@ -116,6 +117,34 @@ func TestLenientSkipsBadSliceAttrElement(t *testing.T) {
 	}
 	if len(m.Nums) != 0 {
 		t.Errorf("Nums = %v, want empty (bad element skipped, not appended as zero)", m.Nums)
+	}
+}
+
+func TestLenientSkipsBadArrayElement(t *testing.T) {
+	body := `<rt:dates><rdf:Seq>` +
+		`<rdf:li>2020-01-02T03:04:05Z</rdf:li>` +
+		`<rdf:li>totally-not-a-date</rdf:li>` +
+		`<rdf:li>2021-06-07T08:09:10Z</rdf:li>` +
+		`</rdf:Seq></rt:dates>`
+	m, err := decode(t, body, false)
+	if err != nil {
+		t.Fatalf("lenient decode: unexpected error: %v", err)
+	}
+	if len(m.Dates) != 2 {
+		t.Fatalf("Dates len = %d, want 2 (bad element skipped, not stored as zero): %v", len(m.Dates), m.Dates)
+	}
+	for i, d := range m.Dates {
+		if d.IsZero() {
+			t.Errorf("Dates[%d] is zero-time; bad element was injected instead of skipped", i)
+		}
+	}
+}
+
+func TestStrictFailsOnBadArrayElement(t *testing.T) {
+	body := `<rt:dates><rdf:Seq><rdf:li>2020-01-02T03:04:05Z</rdf:li>` +
+		`<rdf:li>totally-not-a-date</rdf:li></rdf:Seq></rt:dates>`
+	if _, err := decode(t, body, true); err == nil {
+		t.Fatal("strict decode: expected error, got nil")
 	}
 }
 

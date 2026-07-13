@@ -639,16 +639,22 @@ func UnmarshalArray(d *Decoder, node *Node, typ ArrayType, out interface{}) erro
 					}
 				}
 			}
-			if err := d.DecodeElement(&i.Value, n); err != nil {
-				return err
+			if err := d.withStrict(func() error { return d.DecodeElement(&i.Value, n) }); err != nil {
+				if serr := d.softDecodeError(err); serr != nil {
+					return serr
+				}
+				continue // lenient: skip the element rather than storing a zero
 			}
 		} else {
 			// custom unmarshal for other types
 			//
 			// LogDebugf("++++ Array unmarshal custom type=%v\n", val.Type())
 			//
-			if err := d.unmarshal(val.Elem(), nil, n); err != nil {
-				return err
+			if err := d.withStrict(func() error { return d.unmarshal(val.Elem(), nil, n) }); err != nil {
+				if serr := d.softDecodeError(err); serr != nil {
+					return serr
+				}
+				continue // lenient: skip the element rather than storing a zero
 			}
 		}
 		if sliceValue.Kind() == reflect.Array {
