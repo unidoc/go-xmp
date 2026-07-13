@@ -370,13 +370,15 @@ func (d *Decoder) unmarshalAttr(val reflect.Value, finfo *fieldInfo, src Attr) e
 		// Decode into a standalone element and only append on success. The
 		// element is decoded strictly so a failure is reported here rather than
 		// swallowed by a nested softDecodeError; that keeps a skipped value (in
-		// lenient mode) from leaving a zero-value entry in the slice.
+		// lenient mode) from leaving a zero-value entry in the slice. The flag
+		// is restored via defer so a panic in unmarshalAttr cannot leave the
+		// decoder stuck in strict mode.
 		elem := reflect.New(val.Type().Elem()).Elem()
 		strict := d.strict
 		d.strict = true
-		err := d.unmarshalAttr(elem, nil, src)
-		d.strict = strict
-		if err != nil {
+		defer func() { d.strict = strict }()
+		if err := d.unmarshalAttr(elem, nil, src); err != nil {
+			d.strict = strict // decide skip vs propagate in the caller's mode
 			return d.softDecodeError(fmt.Errorf("xmp: unmarshal %s: %v", fieldInfoName(finfo), err))
 		}
 		val.Set(reflect.Append(val, elem))
