@@ -233,6 +233,11 @@ func normalizePDFDate(value string) string {
 	if len(digits) > 14 {
 		digits = digits[:14] // ignore sub-second / trailing junk digits
 	}
+	if len(digits)%2 == 1 {
+		// PDF date components come in 2-digit pairs; drop a dangling digit
+		// rather than shifting it into the next component's high position.
+		digits = digits[:len(digits)-1]
+	}
 	// pad missing components (month and day default to 01, time to 00)
 	digits += "00000101000000"[len(digits):]
 	date := digits[0:4] + "-" + digits[4:6] + "-" + digits[6:8] +

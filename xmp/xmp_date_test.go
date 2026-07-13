@@ -34,6 +34,7 @@ func TestParseDateLenient(t *testing.T) {
 		{"pdf-no-offset", "D:20200309102906", time.Date(2020, 3, 9, 10, 29, 6, 0, time.UTC)},
 		{"pdf-year-only", "D:2020", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
 		{"pdf-overlong-digits", "D:2020030910290612345+03'00'", time.Date(2020, 3, 9, 10, 29, 6, 0, time.FixedZone("", 3*3600))},
+		{"pdf-truncated-component", "D:20200309102", time.Date(2020, 3, 9, 10, 0, 0, 0, time.UTC)},
 		{"rfc3339", "2020-03-09T10:29:06Z", time.Date(2020, 3, 9, 10, 29, 6, 0, time.UTC)},
 		{"date-only", "2019-12-24", time.Date(2019, 12, 24, 0, 0, 0, 0, time.UTC)},
 	}
