@@ -93,6 +93,17 @@ func sanitizeLogValue(s string) string {
 	return strings.NewReplacer("\r", " ", "\n", " ").Replace(s)
 }
 
+// fieldInfoName describes a field for error messages. finfo is nil when
+// decoding a value that has no associated struct field (e.g. array elements
+// via array.go or a scalar target passed to DecodeElement); String has a value
+// receiver, so calling it on a nil *fieldInfo would panic.
+func fieldInfoName(finfo *fieldInfo) string {
+	if finfo == nil {
+		return "value"
+	}
+	return finfo.String()
+}
+
 func Unmarshal(data []byte, d *Document) error {
 	return NewDecoder(bytes.NewReader(data)).Decode(d)
 }
@@ -327,7 +338,7 @@ func (d *Decoder) unmarshal(val reflect.Value, finfo *fieldInfo, src *Node) erro
 	} else {
 		// otherwise set simple value directly
 		if err := setValue(val, src.Value); err != nil {
-			return d.softDecodeError(fmt.Errorf("xmp: unmarshal %s: %v", finfo.String(), err))
+			return d.softDecodeError(fmt.Errorf("xmp: unmarshal %s: %v", fieldInfoName(finfo), err))
 		}
 	}
 
@@ -366,7 +377,7 @@ func (d *Decoder) unmarshalAttr(val reflect.Value, finfo *fieldInfo, src Attr) e
 		err := d.unmarshalAttr(elem, nil, src)
 		d.strict = strict
 		if err != nil {
-			return d.softDecodeError(fmt.Errorf("xmp: unmarshal %s: %v", finfo.String(), err))
+			return d.softDecodeError(fmt.Errorf("xmp: unmarshal %s: %v", fieldInfoName(finfo), err))
 		}
 		val.Set(reflect.Append(val, elem))
 		return nil
