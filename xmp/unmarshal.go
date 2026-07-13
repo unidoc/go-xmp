@@ -81,8 +81,16 @@ func (d *Decoder) softDecodeError(err error) error {
 	if err == nil || d.strict {
 		return err
 	}
-	Log.Debugf("xmp: skipping property: %v", err)
+	// The error can embed untrusted property values; strip CR/LF so a crafted
+	// value cannot forge additional log lines.
+	Log.Debugf("xmp: skipping property: %s", sanitizeLogValue(err.Error()))
 	return nil
+}
+
+// sanitizeLogValue removes carriage returns and newlines from a string so
+// untrusted content carried in a log message cannot inject fake log lines.
+func sanitizeLogValue(s string) string {
+	return strings.NewReplacer("\r", " ", "\n", " ").Replace(s)
 }
 
 func Unmarshal(data []byte, d *Document) error {

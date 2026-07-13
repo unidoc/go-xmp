@@ -15,9 +15,16 @@
 package xmp
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestSanitizeLogValue(t *testing.T) {
+	if got := sanitizeLogValue("bad\r\nvalue\ninjected"); strings.ContainsAny(got, "\r\n") {
+		t.Errorf("sanitizeLogValue(%q) still contains CR/LF: %q", "bad\r\nvalue\ninjected", got)
+	}
+}
 
 func TestParseDateLenient(t *testing.T) {
 	cases := []struct {
